@@ -171,7 +171,13 @@ public class App implements MqttCallback {
 
 	@Override
 	public void disconnected(MqttDisconnectResponse disconnectResponse) {
-		System.out.println("Disconnection Complete!");
+		System.out.println("Disconnection Complete! : " + disconnectResponse.toString());
 
+	}
+
+	@Override
+	public void mqttErrorOccured(MqttException exception) {
+		System.out.println("MQTT Error Occured: " + exception.getMessage());
+		
 	}
 }
