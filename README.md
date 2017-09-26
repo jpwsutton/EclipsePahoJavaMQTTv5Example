@@ -6,7 +6,33 @@ An Example MQTTv5 Application using the new Eclipse Paho Java Client
 ## Build and Run
 
  * To build: ```mvn package```
- * Then to run it: ```java -cp target/mqttv5-sample-app-1.0-SNAPSHOT.jar org.eclipse.paho.App```
+
+### Examples
+
+ There are a number of example classes in this project, allowing you to test out various parts of the new MQTTv5 functionality.
+
+#### Main Example
+ This example shows off some of the new features available in the MQTTv5 Paho Java Client:
+
+ - Connecting with the extended connection properties.
+ - Connection acknowledgement properties.
+ - Subscription acknowledgement properties.
+ - The new mqttErrorOccured Callback for non-fatal protocol errors e.g. If the server sent a message with an invalid topic alias.
+ - The new disconnected Callback replacing connectionLost.
+ - More to come, watch this space!
+
+To run it, build the project and then execute: ```java -cp target/mqttv5-sample-app-1.0-SNAPSHOT.jar org.eclipse.paho.App```
+
+
+#### Client Disconnect Example
+This example application shows how you can add your own custom properties to a disconnect message when disconnecting from a server.
+
+ - Return Code - There are a range of Return Codes you can send to the server to indicate the reason for your disconnection, or even to trigger a certain behaviour after the client has disconnected.
+ - Session Expiry Interval - If the Session Expiry interval in the  connect packet was NOT 0, then this will override the value that was sent upon connection (or the default), this will cause the session to expire after the selected interval.
+ - Reason String - A human readable string containing a more 'friendly' message explaining why the client disconnected, this is only meant to be used for diagnostics and should NOT be parsed by the server.
+ - User Properties - An Array of {@link UserProperty} that can be used to send further information to the server, dependent on the server being able to parse them.
+
+To run it, build the project and then execute: ```java -cp target/mqttv5-sample-app-1.0-SNAPSHOT.jar org.eclipse.paho.DisconnectExample```
 
 
 ## Finding an MQTTv5 Broker to test against

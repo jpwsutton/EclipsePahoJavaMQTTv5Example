@@ -12,6 +12,8 @@
  */
 package org.eclipse.paho;
 
+import java.util.ArrayList;
+
 import org.eclipse.paho.mqttv5.client.IMqttDeliveryToken;
 import org.eclipse.paho.mqttv5.client.IMqttToken;
 import org.eclipse.paho.mqttv5.client.MqttActionListener;
@@ -24,29 +26,39 @@ import org.eclipse.paho.mqttv5.client.MqttToken;
 import org.eclipse.paho.mqttv5.client.persist.MemoryPersistence;
 import org.eclipse.paho.mqttv5.common.MqttException;
 import org.eclipse.paho.mqttv5.common.MqttMessage;
+import org.eclipse.paho.mqttv5.common.packet.MqttReturnCode;
+import org.eclipse.paho.mqttv5.common.packet.UserProperty;
 
 /**
  * Sample MQTTv5 Eclipse Paho Java App.
  * https://github.com/jpwsutton/EclipsePahoJavaMQTTv5Example
  * 
- * This example application shows some of the new features available in the
- * MQTTv5 Paho Java Client.
- * 
- * <ul>
- * <li>Connecting with the extended connection properties.</li>
- * <li>Connection acknowledgement properties</li>
- * <li>Subscription acknowledgement properties</li>
- * <li>The new mqttErrorOccured Callback for non-fatal protocol errors e.g. If
- * the server sent a message with an invalid topic alias.</li>
- * <li>The new disconnected Callback replacing connectionLost</li>
- * <li>More to come, watch this space!</li>
- * </ul>
- * 
- * - - - -
- * 
  * @author James Sutton (2017) - Initial Contribution
+ * 
+ *         This example application shows how you can add your own custom
+ *         properties to a disconnect message when disconnecting from a server.
+ * 
+ *         Example Properties you can now add in MQTTv5 are:
+ * 
+ *         <ul>
+ *         <li>Return Code - There are a range of Return Codes you can send to
+ *         the server to indicate the reason for your disconnection, or even to
+ *         trigger a certain behaviour after the client has disconnected.</li>
+ *         <li>Session Expiry Interval - If the Session Expiry interval in the
+ *         connect packet was NOT 0, then this will override the value that was
+ *         sent upon connection (or the default), this will cause the session to
+ *         expire after the selected interval.</li>
+ *         <li>Reason String - A human readable string containing a more
+ *         'friendly' message explaining why the client disconnected, this is
+ *         only meant to be used for diagnostics and should NOT be parsed by the
+ *         server.</li>
+ *         <li>User Properties - An Array of {@link UserProperty} that can be
+ *         used to send further information to the server, dependent on the
+ *         server being able to parse them.</li>
+ *         </ul>
+ * 
  */
-public class App implements MqttCallback {
+public class DisconnectExample implements MqttCallback {
 
 	// ------ Client Configuration ------ //
 	String topic = "MQTTV5";
@@ -56,16 +68,14 @@ public class App implements MqttCallback {
 	String broker = "tcp://localhost:1883";
 	String clientId = "PahoJavaV5Client";
 	int messagesToSend = 5;
-	private int sentMessageCount = 0;
 	private MqttAsyncClient asyncClient;
-	private boolean publishing = true;
 
 	/**
 	 * Main App Class, nothing fancy here.
 	 * 
 	 * @throws InterruptedException
 	 */
-	public App() throws InterruptedException {
+	public DisconnectExample() throws InterruptedException {
 		try {
 			MemoryPersistence persistence = new MemoryPersistence();
 			this.asyncClient = new MqttAsyncClient(broker, clientId, persistence);
@@ -74,54 +84,58 @@ public class App implements MqttCallback {
 			MqttConnectionOptionsBuilder conOptsBuilder = new MqttConnectionOptionsBuilder();
 			MqttConnectionOptions conOpts = conOptsBuilder.serverURI(broker).cleanSession(true)
 					.sessionExpiryInterval(120).automaticReconnect(true)
-					.will(topic, new MqttMessage(willContent.getBytes(), qos, false)).topicAliasMaximum(1000).build();
+					.will(topic, new MqttMessage(willContent.getBytes(), qos, false)).topicAliasMaximum(1000)
+					.sessionExpiryInterval(10).build();
 			asyncClient.setCallback(this);
 
 			System.out.println("Connecting to broker: " + broker);
 
-			asyncClient.connect(conOpts, null, new MqttActionListener() {
+			IMqttToken connectToken = asyncClient.connect(conOpts, null, new MqttActionListener() {
 
 				@Override
 				public void onSuccess(IMqttToken asyncActionToken) {
 					System.out.println("Connected");
-
 					SampleUtilities.printConnectDetails((MqttToken) asyncActionToken);
-					try {
-						IMqttToken subToken = asyncClient.subscribe(topic, qos);
-						subToken.waitForCompletion();
-						SampleUtilities.printSubscriptionDetails((MqttToken) subToken);
-						MqttMessage msg = new MqttMessage(content.getBytes());
-						msg.setQos(qos);
-						asyncClient.publish(topic, msg);
-					} catch (MqttException e) {
-						System.err.println("Exception Occured whilst Subscribing:");
-						e.printStackTrace();
-					}
-
 				}
 
 				@Override
 				public void onFailure(IMqttToken asyncActionToken, Throwable exception) {
 					System.out.println("Failed to Connect: " + exception.getLocalizedMessage());
-
 				}
 			});
 
-			while (this.publishing) {
+			MqttActionListener disconnectListener = new MqttActionListener() {
 
-				// asyncClient.publish(topic, new MqttMessage(content.getBytes(), 2, false));
-				Thread.sleep(1000);
-				System.out.println("Sending Message: " + sentMessageCount);
-				String message = content + " " + sentMessageCount;
-				asyncClient.publish(topic, new MqttMessage(message.getBytes(), 2, false));
-				if (sentMessageCount == messagesToSend) {
-					System.out.println("Have sent " + messagesToSend + ", stopping client.");
-					break;
+				@Override
+				public void onSuccess(IMqttToken asyncActionToken) {
+					System.out.println("Disconnect Successful!");
 				}
-				sentMessageCount++;
 
-			}
-			asyncClient.disconnect(5000);
+				@Override
+				public void onFailure(IMqttToken asyncActionToken, Throwable exception) {
+					System.out.println("Disconnect Failed! : " + exception.getMessage());
+				}
+			};
+			connectToken.waitForCompletion();
+			// We should now be connected to the MQTTv5 Broker, time to disconnect.
+
+			// Create some User Properties.
+			ArrayList<UserProperty> userProperties = new ArrayList<UserProperty>();
+			userProperties.add(new UserProperty("dogFood", "cheeseSandwich"));
+			userProperties.add(new UserProperty("meaningOfLife", "42"));
+			userProperties.add(new UserProperty("sizeOfBrain", "planet"));
+
+			// Build up the disconnect command
+			IMqttToken disconnectToken = asyncClient.disconnect(5000, // The Quiesce Timeout
+					null, // User context object
+					disconnectListener, // The Disconnect Listener
+					MqttReturnCode.RETURN_CODE_DISCONNECT_WITH_WILL_MESSAGE, // Return code - Send will message
+					30, // Session Expiry Interval in seconds
+					"This is an example reason string!", // Diagnostic Reason String
+					userProperties // Arraylist of User Properties
+			);
+
+			disconnectToken.waitForCompletion();
 			System.out.println("Disconnected");
 			asyncClient.close();
 			System.exit(0);
@@ -138,8 +152,8 @@ public class App implements MqttCallback {
 	 * @throws InterruptedException
 	 */
 	public static void main(String[] args) throws InterruptedException {
-		SampleUtilities.printBanner("MQTTv5 Sample Java App");
-		new App();
+		SampleUtilities.printBanner("MQTTv5 Disconnect Example Java App");
+		new DisconnectExample();
 
 	}
 
@@ -152,13 +166,11 @@ public class App implements MqttCallback {
 	@Override
 	public void deliveryComplete(IMqttDeliveryToken token) {
 		System.out.println("Delivery Complete: Message ID: " + token.getMessageId());
-
 	}
 
 	@Override
 	public void disconnected(MqttDisconnectResponse disconnectResponse) {
 		System.out.println("Disconnection Complete! : " + disconnectResponse.toString());
-
 	}
 
 	@Override
