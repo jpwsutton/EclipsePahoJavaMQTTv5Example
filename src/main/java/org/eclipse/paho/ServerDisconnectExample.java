@@ -49,35 +49,35 @@ import org.eclipse.paho.mqttv5.common.packet.UserProperty;
  * 
  * @author James Sutton (2017) - Initial Contribution
  */
-public class App implements MqttCallback {
+public class ServerDisconnectExample implements MqttCallback {
 
 	// ------ Client Configuration ------ //
-	String topic = "MQTTV5";
-	String content = "This Message is being sent over MQTTv5!";
+	String topic = "cmd/disconnectWithRC";
+	String content = "139";
 	String willContent = "I've Disconnected, sorry!";
-	int qos = 1;
+	int qos = 0;
 	String broker = "tcp://localhost:1883";
 	String clientId = "PahoJavaV5Client";
 	int messagesToSend = 5;
-	private int sentMessageCount = 0;
 	private MqttAsyncClient asyncClient;
-	private boolean publishing = true;
 
 	/**
 	 * Main App Class, nothing fancy here.
 	 * 
 	 * @throws InterruptedException
 	 */
-	public App() throws InterruptedException {
+	public ServerDisconnectExample() throws InterruptedException {
 		try {
 			MemoryPersistence persistence = new MemoryPersistence();
 			this.asyncClient = new MqttAsyncClient(broker, clientId, persistence);
+			ArrayList<UserProperty> userProps = new ArrayList<UserProperty>();
+			userProps.add(new UserProperty("myKey", "myValue"));
 
 			// Lets build our Connection Options:
 			MqttConnectionOptionsBuilder conOptsBuilder = new MqttConnectionOptionsBuilder();
 			MqttConnectionOptions conOpts = conOptsBuilder.serverURI(broker).cleanSession(true)
-					.sessionExpiryInterval(120).automaticReconnect(true)
-					.will(topic, new MqttMessage(willContent.getBytes(), qos, false)).topicAliasMaximum(1000).build();
+					.sessionExpiryInterval(120).automaticReconnect(false)
+					.topicAliasMaximum(1000).userProperties(userProps).build();
 			asyncClient.setCallback(this);
 
 			System.out.println("Connecting to broker: " + broker);
@@ -90,9 +90,7 @@ public class App implements MqttCallback {
 
 					SampleUtilities.printConnectDetails((MqttToken) asyncActionToken);
 					try {
-						IMqttToken subToken = asyncClient.subscribe(topic, qos);
-						subToken.waitForCompletion();
-						SampleUtilities.printSubscriptionDetails((MqttToken) subToken);
+						
 						MqttMessage msg = new MqttMessage(content.getBytes());
 						msg.setQos(qos);
 						asyncClient.publish(topic, msg);
@@ -110,50 +108,17 @@ public class App implements MqttCallback {
 				}
 			});
 
-			while (this.publishing) {
-				Thread.sleep(1000);
-				System.out.println("Sending Message: " + sentMessageCount);
-				String message = content + " " + sentMessageCount;
-				publishMessage(message);
-				if (sentMessageCount == messagesToSend) {
-					System.out.println("Have sent " + messagesToSend + ", stopping client.");
-					break;
-				}
-				sentMessageCount++;
-
-			}
+			/**
 			asyncClient.disconnect(5000);
 			System.out.println("Disconnected");
 			asyncClient.close();
 			System.exit(0);
+			*/
 
 		} catch (MqttException e) {
 			System.err.println("Exception Occured whilst connecting the client: ");
 			e.printStackTrace();
 		}
-	}
-	
-	/**
-	 * Publish a message with example properties set.
-	 * @param messageContent the message payload to send.
-	 */
-	public void publishMessage(String messageContent) {
-		MqttMessage message = new MqttMessage(messageContent.getBytes(), qos, false);
-		message.setContentType("string");
-		message.setUTF8(true); // Message is UTF-8 encoded
-		message.setExpiryInterval(120); // Message should expire after 120 seconds
-		message.setResponseTopic("responseTopic"); // The Response Topic
-		ArrayList<UserProperty> userDefinedProperties = new ArrayList<>();
-		userDefinedProperties.add(new UserProperty("up1", "val1"));
-		userDefinedProperties.add(new UserProperty("up2", "val2"));
-		message.setUserProperties(userDefinedProperties);
-		
-		try {
-		asyncClient.publish(topic, message);
-		}catch (Exception e) {
-			System.err.println("Exception Occured whilst publishing the message: " + e.getMessage());
-		}
-		
 	}
 
 	/**
@@ -163,7 +128,7 @@ public class App implements MqttCallback {
 	 */
 	public static void main(String[] args) throws InterruptedException {
 		SampleUtilities.printBanner("MQTTv5 Sample Java App");
-		new App();
+		new ServerDisconnectExample();
 
 	}
 
@@ -171,7 +136,6 @@ public class App implements MqttCallback {
 	public void messageArrived(String topic, MqttMessage message) throws Exception {
 		String incomingMessage = new String(message.getPayload());
 		System.out.println("Incoming Message: [" + incomingMessage + "], topic:[" + topic + "]");
-		System.out.println("Incoming Message: " + message.toDebugString());
 	}
 
 	@Override
@@ -183,6 +147,7 @@ public class App implements MqttCallback {
 	@Override
 	public void disconnected(MqttDisconnectResponse disconnectResponse) {
 		System.out.println("Disconnection Complete! : " + disconnectResponse.toString());
+		System.exit(0);
 
 	}
 
